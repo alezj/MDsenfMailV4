@@ -60,12 +60,12 @@ namespace MDsenfMailV4
          void EjecutarColaDeProcesos()
         {
             WinServiceLog.WriteLog("iniciando cola de procesos...");
-            ExecuteAsync();
+            EnviarCorreo();
         }
 
         // protected async Task ExecuteAsync(CancellationToken stoppingToken)
         // protected async Task ExecuteAsync()
-             void ExecuteAsync()
+             void EnviarCorreo()
         {
 
 
