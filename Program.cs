@@ -15,16 +15,16 @@ namespace MDsenfMailV4
         static void Main()
         {
             // // INICIO DE SERVICIO
-            ServiceBase[] ServicesToRun;
-            ServicesToRun = new ServiceBase[]
-            {
-                new MDSenderMailService()
-            };
-            ServiceBase.Run(ServicesToRun);
+            //ServiceBase[] ServicesToRun;
+            //ServicesToRun = new ServiceBase[]
+            //{
+            //    new MDSenderMailService()
+            //};
+            //ServiceBase.Run(ServicesToRun);
 
-            //// MODO DEBUG
-            //var Send = new MDSenderMailService();
-            //Send.IniciarServicio();
+            // MODO DEBUG
+            var Send = new MDSenderMailService();
+            Send.IniciarServicio();
         }
 
 

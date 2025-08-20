@@ -61,14 +61,13 @@ namespace MDsenfMailV4
         {
             WinServiceLog.WriteLog("iniciando cola de procesos...");
             EnviarCorreo();
+            EnviarCorreoRecurrente();
         }
 
         // protected async Task ExecuteAsync(CancellationToken stoppingToken)
         // protected async Task ExecuteAsync()
              void EnviarCorreo()
-        {
-
-
+             {
 
             //while (!stoppingToken.IsCancellationRequested)
             //{
@@ -93,13 +92,13 @@ namespace MDsenfMailV4
                                 while ( reader.Read())
                                 {
                                 //var id = reader.GetInt32(int.Parse("Id"));
-                                    string id = reader["Id"].ToString(); 
-                                    string storedProc = reader["StoredProcedure"].ToString();
-                                    string asunto = reader["Asunto"].ToString();
-                                    string destinatarios = reader["Destinatarios"].ToString();
-                                    string diasEnvio = reader["DiasEnvio"].ToString(); // Ej: "L,M,X"
-                                    TimeSpan horaEnvio = reader["HoraEnvio"] != DBNull.Value ? (TimeSpan)reader["HoraEnvio"] : TimeSpan.Zero;
-                                    DateTime? ultimoEnvio = reader["UltimoEnvio"] != DBNull.Value ? (DateTime?)reader["UltimoEnvio"] : null;
+                                    string id = reader["CoPId"].ToString(); 
+                                    string storedProc = reader["CopStoredProcedure"].ToString();
+                                    string asunto = reader["CopAsunto"].ToString();
+                                    string destinatarios = reader["CopDestinatarios"].ToString();
+                                    string diasEnvio = reader["CopDiasEnvio"].ToString(); // Ej: "L,M,X"
+                                    TimeSpan horaEnvio = reader["CopHoraEnvio"] != DBNull.Value ? (TimeSpan)reader["CopHoraEnvio"] : TimeSpan.Zero;
+                                    DateTime? ultimoEnvio = reader["CopUltimoEnvio"] != DBNull.Value ? (DateTime?)reader["CopUltimoEnvio"] : null;
 
 
 
@@ -207,6 +206,146 @@ namespace MDsenfMailV4
                //}
              }
 
+
+        void EnviarCorreoRecurrente()
+        {
+
+            //while (!stoppingToken.IsCancellationRequested)
+            //{
+            try
+            {
+
+                WinServiceLog.WriteLog($"Iniciando el envio de correos Recurrentes: {DateTimeOffset.Now}");
+                var plantillas = new List<(int Id, string StoredProc, string Asunto, string Destinatarios, string DiasEnvio, TimeSpan HoraEnvio, DateTime? UltimoEnvio, int TiempoEnvio)>();
+
+                using (var connection = new SqlConnection(ConfigurationManager.AppSettings["SqlConnection"]))
+                {
+                    //await connection.OpenAsync(stoppingToken);
+                    connection.Open(); // 👈 Esto es necesario
+
+                    Console.WriteLine("Conexión abierta.");
+                    using (var cmd = new SqlCommand("sp_ObtenerCorreoRecurrente", connection))
+                    {
+                        cmd.CommandType = CommandType.StoredProcedure;
+
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                //var id = reader.GetInt32(int.Parse("Id"));
+                                string id = reader["CoPId"].ToString();
+                                string storedProc = reader["CopStoredProcedure"].ToString();
+                                string asunto = reader["CopAsunto"].ToString();
+                                string destinatarios = reader["CopDestinatarios"].ToString();
+                                string diasEnvio = reader["CopDiasEnvio"].ToString(); // Ej: "L,M,X"
+                                TimeSpan horaEnvio = reader["CopHoraEnvio"] != DBNull.Value ? (TimeSpan)reader["CopHoraEnvio"] : TimeSpan.Zero;
+                                DateTime? ultimoEnvio = reader["CopUltimoEnvio"] != DBNull.Value ? (DateTime?)reader["CopUltimoEnvio"] : null;
+                                int tiempoEnvio = int.Parse(reader["CopTiempoEnvio"].ToString());
+
+
+
+                                plantillas.Add((int.Parse(id), storedProc, asunto, destinatarios, diasEnvio, horaEnvio, ultimoEnvio, tiempoEnvio));
+
+                                ////Cuerpo del Correo 
+                                //string cuerpoHtml = "";
+
+                                ////using (var cmdBody = new SqlCommand(storedProc, connection))
+                                //{
+                                //    // cmdBody.CommandType = CommandType.StoredProcedure;
+                                //    cmd.CommandType = CommandType.StoredProcedure;
+
+                                //    using (var result = cmd.ExecuteReader())
+                                //    {
+                                //        if (result.Read())
+                                //        {
+                                //            cuerpoHtml = result[0].ToString();
+                                //        }
+                                //    }
+                                //}
+
+                                //// Lógica de envío con MailKit o SmtpClient
+                                //_sendCorreo.EnviarCorreo(destinatarios, asunto, cuerpoHtml);
+                            }
+
+                        }
+
+                        foreach (var plantilla in plantillas)
+                        {
+                            // Día y hora actual
+                            var ahora = DateTime.Now;
+                            string diaActual = ahora.ToString("ddd", new System.Globalization.CultureInfo("es-ES")).Substring(0, 1).ToUpper(); // L, M, X, J, V, S, D
+
+                            TimeSpan horaActual = ahora.TimeOfDay;
+
+                            // Leer campos de SQL
+                            string diasEnvio = plantilla.DiasEnvio; // Ej: "L,M,X"
+                            int tiempoEnvio =plantilla.TiempoEnvio;
+                            DateTime? ultimoEnvio = plantilla.UltimoEnvio;
+
+                            // Verifica si es el día correcto
+                            if (!diasEnvio.Split(',').Contains(diaActual))
+                                continue; // No es el día correcto
+                            
+                            
+                            if (!SendCorreo.DebeEnviar(ultimoEnvio, DateTime.Now, tiempoEnvio)) 
+                                continue;
+
+                            // 👉 Si llegó aquí: se puede enviar
+
+
+                            string cuerpoHtml = "";
+
+                            using (var cmdBody = new SqlCommand(plantilla.StoredProc, connection))
+                            {
+                                cmdBody.CommandType = CommandType.StoredProcedure;
+
+                                using (var result = cmdBody.ExecuteReader())
+                                {
+                                    if (result.Read())
+                                    {
+                                        cuerpoHtml = result[0].ToString();
+                                    }
+                                }
+
+                            }
+                              
+                            SendCorreo.EnviarCorreo(plantilla.Destinatarios, plantilla.Asunto, cuerpoHtml);
+
+                            WinServiceLog.WriteLog($"AsunCorreo enviado: {plantilla.Asunto}");
+
+                            //await connection.OpenAsync(stoppingToken);
+                            using (var cmdActualizar = new SqlCommand("sp_ActualizarPlantillaCorreoRecurrente", connection))
+                            {
+                                cmdActualizar.CommandType = CommandType.StoredProcedure;
+                                cmdActualizar.Parameters.Add(new SqlParameter("@CopID", plantilla.Id ));
+                                cmdActualizar.ExecuteReader();
+                            }
+                        }
+
+                    }
+
+                   
+                }
+                //TODO
+                //_logger.LogInformation("Correos enviados: {time}", DateTimeOffset.Now);
+                WinServiceLog.WriteLog($"Correos enviados: {DateTimeOffset.Now}");
+
+
+
+
+            }
+            catch (Exception ex)
+            {
+                //TODO
+                //_logger.LogError(ex, "Error al enviar correos");
+                WinServiceLog.WriteLog("Error al enviar correos: " + ex.Message);
+            }
+            //var parametros = _config.GetSection("Parametros");
+            // Espera antes de volver a revisar
+            //await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+            // Task.Delay(TimeSpan.FromMinutes(IntervaloTimer));
+            //}
+        }
 
 
         protected override void OnStop()

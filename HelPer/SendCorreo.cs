@@ -47,5 +47,19 @@ namespace MDSendMail.Helper
             }
             smtp.Send(correo);
         }
+
+        public static bool DebeEnviar(DateTime? ultimoEnvio, DateTime ahora, int intervaloMinutos)
+        {
+            // Si nunca se ha enviado, debe enviar
+            if (!ultimoEnvio.HasValue)
+                return true;
+
+            // Calcula diferencia en minutos
+            double minutosTranscurridos = (ahora - ultimoEnvio.Value).TotalMinutes;
+
+            // Retorna true si ya pasó el intervalo
+            return minutosTranscurridos >= intervaloMinutos;
+        }
+
     }
 }
